@@ -1,0 +1,65 @@
+dialog {
+  height: 80vh;
+  width: 80vw;
+  padding: 0;
+  overflow: hidden hidden;
+  section {
+    height: calc(100% - 1rem);
+    width: calc(100% - 1rem);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 0.5rem;
+  }
+  .dialog-loading {
+    position: absolute;
+    z-index: 1000;
+    background-color: white;
+  }
+  form {
+    height: 100%;
+    width: 100%;
+    display: grid;
+    grid-template-rows: 1fr 5rem;
+    grid-template-columns: 100%;
+
+    .selectionArea {
+      border: 1px solid rgb(30, 30, 30);
+      grid-row: 1 / 2;
+      grid-column: 1/1;
+      max-width: 100%;
+      overflow: scroll scroll;
+    }
+    #dialogOperationArea {
+      grid-row: 2 / 2;
+      grid-column: 1/1;
+    }
+    .operationArea {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      max-width: 100%;
+    }
+    table {
+      height: 2rem;
+      min-width: 100%;
+      border-collapse: collapse;
+      border-style: hidden;
+      th,
+      td {
+        min-width: 8rem;
+        border-top: 0.8px dashed rgb(160 160 160);
+        border-left: 0.8px dashed rgb(160 160 160);
+        border-right: 0.8px dashed rgb(160 160 160);
+        padding: 8px 10px;
+      }
+      tr:has(th) {
+        border-top: 1px solid rgb(30, 30, 30);
+        /* border-bottom: 1px solid rgb(30, 30, 30); */
+      }
+    }
+  }
+}
+dialog::backdrop {
+  backdrop-filter: blur(8px);
+}

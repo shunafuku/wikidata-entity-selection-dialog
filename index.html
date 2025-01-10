@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WikidataEntity選択dialog</title>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="dialog.css" />
+    <link rel="stylesheet" href="loading.css" />
+    <script src="./io.js"></script>
+    <script src="index.js"></script>
+    <script src="./pagination.js"></script>
+    <script>
+      const searchAndSelectWikidataEntityByWord =
+        (searchWikidataEntities) => (searchLimit) => async (searchWord) => {
+          // dialogの表示
+          const dialog = document.getElementById('wikidataEntitySelection');
+          dialog.showModal();
+
+          const toggleLoader = toggleDisplay('dialogLoading');
+          // loadingの表示・選択画面の非表示
+          toggleLoader();
+          /* v===  search */
+          // controller
+
+          const wikidataEntities = await searchWikidataEntities();
+
+          console.log('toggleLoader');
+
+          /* 結果表示 */
+
+          const tableElm = await createTableByWikidataEntities(
+            fetchDetailsInfoOfWikidataEntities
+          )('item')(wikidataEntities);
+
+          // dialogに関連するHTML要素の取得
+
+          const closeButton = document.getElementById(
+            'closeBtn4WDEntitySelection'
+          );
+          const confirmBtn = document.getElementById(
+            'confirmBtn4WDEntitySelection'
+          );
+          const selectEl = dialog.querySelector('select');
+          const entitySelection = dialog.querySelector('form');
+          // formの設定
+          entitySelection.addEventListener(
+            'submit',
+            (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              const formData = new FormData(event.target);
+              const wikidataEntity = formData.get('option');
+              console.log(wikidataEntity);
+              dialog.close(wikidataEntity); // ここで選択ボックスの値を送る
+            },
+            { once: true }
+          );
+
+          //　tableの用意
+          const selectionArea = document.getElementById(
+            'wdEntitySelectionArea'
+          );
+          selectionArea.textContent = '';
+          selectionArea.append(tableElm);
+          // loadingを隠す
+          toggleLoader();
+
+          // 続きを表示
+          const continueButton = document.createElement('Button');
+          continueButton.id = 'continue';
+          continueButton.type = 'button';
+          continueButton.textContent = '続きを表示';
+
+          document.getElementById('continue')?.remove();
+          if (wikidataEntities.length == searchLimit) {
+            continueButton.addEventListener('click', async (event) => {
+              event.preventDefault();
+              console.log('続きを表示');
+              toggleLoader();
+              const additionalWikidataEntities = await searchWikidataEntities();
+              const additionalTableElm = await createTableByWikidataEntities(
+                fetchDetailsInfoOfWikidataEntities
+              )('item')(additionalWikidataEntities);
+              const additionalTbody = additionalTableElm.querySelector('tbody');
+              console.log(additionalTbody);
+              const selectionTable = dialog.querySelector('table');
+              selectionTable.append(additionalTbody);
+              if (additionalWikidataEntities.length < searchLimit) {
+                document.getElementById('continue')?.remove();
+              }
+              toggleLoader();
+              console.log('続きを表示完了');
+            });
+            document
+              .getElementById('wdEntitySelectionArea')
+              .appendChild(continueButton);
+          }
+          // dialog要素の子要素にEventListenerを付与
+          closeButton.addEventListener('click', (event) => {
+            event.preventDefault();
+
+            dialog.close();
+          });
+          const wikidataEntity = await waitForEvent(dialog, 'close', (e) => {
+            console.log(
+              dialog.returnValue === 'default'
+                ? 'No return value.'
+                : `ReturnValue: ${dialog.returnValue}` // 空文字列ではなく、既定値かどうかを調べる必要がある
+            );
+            return dialog.returnValue === 'default'
+              ? 'No return value.'
+              : ` ${dialog.returnValue}`;
+          });
+          console.log(wikidataEntity);
+          return wikidataEntity;
+        };
+    </script>
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        /* 検索 */
+        const searchForm = document.getElementById('searchWDEntity');
+        searchForm.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          // 検索単語取得
+          const formData = new FormData(event.target);
+          const searchWord = formData.get('searchWord') ?? '';
+          const searchMethod = formData.get('searchMethods') ?? '';
+          console.log(searchWord);
+          console.log(searchMethod);
+          if (searchWord === '') {
+            alert('検索単語を入力してください');
+            return;
+          }
+          const controller = new AbortController();
+          document.getElementById('abort').addEventListener('click', () => {
+            controller.abort();
+            dialog.close();
+          });
+          const searchLimit = 10;
+          const searchMethods = new Map([
+            [
+              'fuzzySearch',
+              [
+                extractWDEntitiesFromFuzzySearchRes,
+                fuzzySearchSequence(controller)(searchLimit)(searchWord),
+              ],
+            ],
+            [
+              'exactMatchSearch',
+              [
+                extractWDEntitiesFromExactMatchSearchRes,
+                exactMatchSequence(controller)(searchLimit)(searchWord),
+              ],
+            ],
+          ]);
+          const searchWikidataEntities = searchMethods.get(searchMethod).reduce(
+            (acc, cur) => acc(cur),
+            (extractWikidataEntities) => (searchFn) => async () =>
+              extractWikidataEntities(
+                isGenerator(searchFn)
+                  ? await searchFn.next().value
+                  : await searchFn
+              )
+          );
+          const wikidataEntity = await searchAndSelectWikidataEntityByWord(
+            searchWikidataEntities
+          )(searchLimit)(searchWord);
+          document.getElementById('selectedWikidataEntity').innerText =
+            wikidataEntity;
+        });
+        //
+      });
+    </script>
+  </head>
+  <body>
+    <form id="searchWDEntity">
+      <fieldset>
+        <legend>検索方法</legend>
+        <input
+          type="radio"
+          id="exactMatchSearch"
+          name="searchMethods"
+          value="exactMatchSearch"
+        />
+        <label for="exactMatchSearch">完全一致検索(正式名称・別名)</label><br />
+        <input
+          type="radio"
+          id="fuzzySearch"
+          name="searchMethods"
+          value="fuzzySearch"
+        />
+        <label for="fuzzySearch">あいまい検索(正式名称・別名・説明文)</label
+        ><br />
+      </fieldset>
+      <div>
+        <label for="searchWord">検索したい単語を入力: </label>
+        <input type="text" id="searchWord" name="searchWord" />
+      </div>
+      <div>
+        <button type="submit">検索</button>
+      </div>
+    </form>
+    <div>
+      <p>検索結果：<span id="selectedWikidataEntity"></span></p>
+    </div>
+
+    <dialog id="wikidataEntitySelection">
+      <section id="dialogLoading" class="dialog-loading">
+        <div class="loader"></div>
+        <br />
+        <button id="abort">abort</button>
+      </section>
+      <section id="dialogForm" class="dialog-form">
+        <form>
+          <div id="wdEntitySelectionArea" class="selectionArea"></div>
+          <div id="dialogOperationArea" class="operationArea">
+            <button
+              id="closeBtn4WDEntitySelection"
+              value="cancel"
+              formmethod="dialog"
+            >
+              キャンセル
+            </button>
+            <button
+              id="confirmBtn4WDEntitySelection"
+              type="submit"
+              value="default"
+            >
+              確認
+            </button>
+          </div>
+        </form>
+      </section>
+    </dialog>
+  </body>
+</html>
